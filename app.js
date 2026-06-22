@@ -44,6 +44,7 @@ function defaultState() {
       seconds: MATCH_CLOCK_DEFAULT,
       running: false
     },
+    selectedMatchDuration: MATCH_CLOCK_DEFAULT,
     // Twin independent penalty clocks — one per team
     homePenaltyClock: {
       seconds: 0,
@@ -199,7 +200,8 @@ const ClockEngine = (() => {
   }
   function resetMatch() {
     stopMatch();
-    StateManager.update({ matchClock: { seconds: MATCH_CLOCK_DEFAULT, running: false } });
+    const s = StateManager.getState();
+    StateManager.update({ matchClock: { seconds: s.selectedMatchDuration, running: false } });
   }
   function toggleMatch() {
     const s = StateManager.getState();
@@ -357,6 +359,29 @@ function changePenalty(team, value) {
   const s = StateManager.getState();
   const t = s[team];
   StateManager.update({ [team]: { ...t, penalty: value } });
+}
+
+function updateMatchDuration(value) {
+  const minutes = parseInt(value, 10);
+  if (![8, 10].includes(minutes)) return;
+  const seconds = minutes * 60;
+  const s = StateManager.getState();
+  const update = { selectedMatchDuration: seconds };
+  if (!s.matchClock.running) {
+    update.matchClock = { ...s.matchClock, seconds };
+  }
+  StateManager.update(update);
+}
+
+function confirmMatchReset() {
+  const s = StateManager.getState();
+  const resetLabel = formatTime(s.selectedMatchDuration);
+  const doReset = () => ClockEngine.resetMatch();
+  if (typeof window.confirmAction === 'function') {
+    window.confirmAction(`Reset match clock to ${resetLabel}?`, doReset);
+  } else if (confirm(`Reset match clock to ${resetLabel}?`)) {
+    doReset();
+  }
 }
 
 /* ============================================================
@@ -653,6 +678,7 @@ function renderAdmin(state) {
 
   // ── Match Clock ──
   setTextIfChanged(adminEls['match-clock-display'], formatTime(state.matchClock.seconds));
+  setValueIfChanged(adminEls['match-duration-select'], String(state.selectedMatchDuration / 60));
   const matchBtn = adminEls['match-clock-btn'];
   if (matchBtn) {
     const btnText = state.matchClock.running ? '⏸ PAUSE TIMER' : '▶ START TIMER';
@@ -846,7 +872,7 @@ function _buildPlayerRowInner(team, player, idx, isDots, dotClass) {
         P
       </button>
       <button class="foul-btn foul-dec" onclick="changeFoul('${team}Team', '${player.id}', -1)" title="Remove foul">−</button>
-      <button class="foul-btn foul-inc" onclick="changeFoul('${team}Team', '${player.id}', 1)" title="Add foul">F</button>
+     <!--  <button class="foul-btn foul-inc" onclick="changeFoul('${team}Team', '${player.id}', 1)" title="Add foul">F</button> -->
     </div>
     <button class="player-del" onclick="deletePlayer('${team}Team', '${player.id}')" title="Remove player">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -869,6 +895,7 @@ function initAdminElements() {
     'match-clock-display', 'match-clock-btn',
     'home-penalty-clock-display', 'home-penalty-clock-btn', 'home-penalty-queue',
     'away-penalty-clock-display', 'away-penalty-clock-btn', 'away-penalty-queue',
+    'match-duration-select',
     'home-roster-list', 'home-fouls-count',
     'away-roster-list', 'away-fouls-count',
     'home-roster-title', 'away-roster-title',
@@ -895,6 +922,8 @@ document.addEventListener('DOMContentLoaded', () => {
   window.changeScore = changeScore;
   window.changeTimeout = changeTimeout;
   window.changePenalty = changePenalty;
+  window.updateMatchDuration = updateMatchDuration;
+  window.confirmMatchReset = confirmMatchReset;
   window.addPlayer = addPlayer;
   window.updatePlayerName = updatePlayerName;
   window.changeFoul = changeFoul;
