@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WMMF Scoreboard — Live Stream View</title>
+  <meta name="description" content="WMMF live streaming scoreboard — clean OBS-ready display with real-time sync." />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ── Scoreboard-only styles ─────────────────────────── */
+    body { overflow: hidden; }
+
+    .scoreboard-page {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      background: var(--bg);
+    }
+
+    /* Top bar */
+    .sb-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 20px;
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+    }
+    .sb-logo-text {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 2px; color: var(--text-muted);
+    }
+
+    /* ── MAIN SCOREBOARD AREA ───────────────────────────── */
+    .sb-main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      padding: 20px 40px 10px;
+      gap: 24px;
+      min-height: 0;
+    }
+
+    /* Team panels */
+    .sb-team {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 10px;
+    }
+    .sb-team-name {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(16px, 2.5vw, 28px);
+      font-weight: 700; letter-spacing: 2px;
+      text-align: center;
+    }
+    .sb-team-name.home { color: var(--home); text-shadow: 0 0 20px var(--home-glow); }
+    .sb-team-name.away { color: var(--away); text-shadow: 0 0 20px var(--away-glow); }
+
+    .sb-score {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(70px, 10vw, 120px);
+      font-weight: 900; line-height: 1;
+      transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .sb-score.home {
+      color: var(--home);
+      text-shadow: 0 0 40px var(--home-glow), 0 0 80px rgba(0,200,255,0.1);
+    }
+    .sb-score.away {
+      color: var(--away);
+      text-shadow: 0 0 40px var(--away-glow), 0 0 80px rgba(255,140,0,0.1);
+    }
+    .score-changed {
+      animation: score-pop 0.35s cubic-bezier(0.34,1.56,0.64,1);
+    }
+
+    .sb-timeouts {
+      display: flex; gap: 5px;
+    }
+    .sb-timeout-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      border: 1.5px solid;
+      transition: background 0.2s;
+    }
+    .sb-timeout-dot.home { border-color: var(--home); }
+    .sb-timeout-dot.home.used { background: var(--home); box-shadow: 0 0 6px var(--home-glow); }
+    .sb-timeout-dot.away { border-color: var(--away); }
+    .sb-timeout-dot.away.used { background: var(--away); box-shadow: 0 0 6px var(--away-glow); }
+
+    .sb-penalty-badge {
+      padding: 4px 14px;
+      background: var(--penalty-dim);
+      border: 1px solid rgba(255,59,59,0.5);
+      border-radius: 20px;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--penalty);
+      text-shadow: 0 0 8px var(--penalty-glow);
+      animation: penalty-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes penalty-pulse {
+      0%,100%{box-shadow:0 0 0 0 rgba(255,59,59,0)}
+      50%{box-shadow:0 0 12px 2px rgba(255,59,59,0.25)}
+    }
+
+    /* Center clock area */
+    .sb-center {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 12px;
+      min-width: 200px;
+    }
+    .sb-clock-box {
+      background: var(--surface);
+      border: 1px solid rgba(57,255,20,0.25);
+      border-radius: var(--radius-lg);
+      padding: 14px 28px;
+      text-align: center;
+      box-shadow: 0 0 30px rgba(57,255,20,0.08);
+    }
+    .sb-clock-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 2px;
+      color: var(--text-muted); margin-bottom: 4px;
+    }
+    .sb-clock {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(32px, 4.5vw, 56px);
+      font-weight: 900;
+      color: var(--clock);
+      text-shadow: 0 0 30px var(--clock-glow);
+      letter-spacing: 4px; line-height: 1;
+    }
+    .sb-penalty-box {
+      background: var(--surface);
+      border: 1px solid rgba(255,59,59,0.25);
+      border-radius: var(--radius-md);
+      padding: 8px 20px;
+      text-align: center;
+    }
+    .sb-penalty-clock-val {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(18px, 2.5vw, 28px);
+      font-weight: 700;
+      color: var(--penalty);
+      text-shadow: 0 0 16px var(--penalty-glow);
+      letter-spacing: 3px;
+    }
+    .sb-vs {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 16px; font-weight: 700;
+      color: var(--text-muted); letter-spacing: 3px;
+    }
+
+    /* ── ROSTER AREA ────────────────────────────────────── */
+    .sb-rosters {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 0 40px 20px;
+      gap: 16px;
+    }
+    .sb-roster-panel {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .sb-roster-panel.home-panel { border-top: 2px solid var(--home); }
+    .sb-roster-panel.away-panel { border-top: 2px solid var(--away); }
+    .sb-roster-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sb-roster-head-title {
+      font-size: 9px; font-weight: 700; letter-spacing: 2px; color: var(--text-muted);
+    }
+    .sb-roster-fouls {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      color: var(--text-muted);
+    }
+    .sb-roster-fouls span {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px; color: var(--penalty);
+      margin-left: 6px;
+    }
+    .sb-player-row {
+      display: flex; align-items: center;
+      padding: 7px 14px; gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      transition: background 0.15s;
+    }
+    .sb-player-row:last-child { border-bottom: none; }
+    .sb-player-num {
+      width: 24px; height: 24px;
+      background: var(--surface-2);
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .sb-player-name { flex: 1; font-size: 12px; font-weight: 500; }
+    .sb-dots { display: flex; gap: 3px; align-items: center; }
+    .sb-dot {
+      width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid;
+      transition: all 0.2s;
+    }
+    .sb-dot.home { border-color: var(--home); }
+    .sb-dot.home.filled {
+      background: var(--home); box-shadow: 0 0 6px var(--home-glow);
+    }
+    .sb-dot.away { border-color: var(--away); }
+    .sb-dot.away.filled {
+      background: var(--away); box-shadow: 0 0 6px var(--away-glow);
+    }
+    .sb-foul-num {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 15px; font-weight: 700; color: var(--penalty);
+      min-width: 24px; text-align: center;
+    }
+
+    /* ── Sync indicator ─────────────────────────────────── */
+    .sync-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--clock);
+      box-shadow: 0 0 8px var(--clock-glow);
+      animation: blink 1s ease-in-out infinite;
+    }
+    .sync-dot.stale { background: var(--penalty); box-shadow: 0 0 8px var(--penalty-glow); }
+  </style>
+</head>
+<body class="scoreboard-page">
+
+<!-- HEADER -->
+<header class="sb-header">
+  <div class="sb-logo-text">MMF MATCHUP MATCH CLOCK — LIVE STREAM VIEW</div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="sync-dot" id="sync-dot"></div>
+    <span style="font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:1px;" id="sync-label">SYNCED</span>
+    <a href="index.html" class="nav-btn" style="text-decoration:none;font-size:11px;">
+      ← Admin
+    </a>
+  </div>
+</header>
+
+<!-- MAIN SCOREBOARD -->
+<div class="sb-main">
+
+  <!-- HOME TEAM -->
+  <div class="sb-team" id="sb-home-team">
+    <div class="sb-team-name home" id="sb-home-name">HOME TEAM</div>
+    <div class="sb-score home" id="sb-home-score">0</div>
+    <div class="sb-timeouts" id="sb-home-timeouts"></div>
+    <div class="sb-penalty-badge" id="sb-home-penalty" style="display:none;"></div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="sb-center">
+    <div class="sb-clock-box">
+      <div class="sb-clock-label">MATCH CLOCK</div>
+      <div class="sb-clock" id="sb-match-clock">10:00</div>
+    </div>
+    <div class="sb-vs">VS</div>
+    <div style="display: flex; gap: 12px; width: 100%; justify-content: center; margin-top: 4px;">
+      <div class="sb-penalty-box" style="flex: 1; border-color: rgba(0, 200, 255, 0.25); min-width: 90px; padding: 6px 12px;">
+        <div class="sb-clock-label" style="color: var(--home); font-size: 8px; letter-spacing: 1px; margin-bottom: 2px;">HOME PENALTY</div>
+        <div class="sb-penalty-clock-val" id="sb-home-penalty-clock" style="color: var(--home); text-shadow: 0 0 16px var(--home-glow); font-size: clamp(14px, 2vw, 22px);">00:00</div>
+      </div>
+      <div class="sb-penalty-box" style="flex: 1; border-color: rgba(255, 140, 0, 0.25); min-width: 90px; padding: 6px 12px;">
+        <div class="sb-clock-label" style="color: var(--away); font-size: 8px; letter-spacing: 1px; margin-bottom: 2px;">AWAY PENALTY</div>
+        <div class="sb-penalty-clock-val" id="sb-away-penalty-clock" style="color: var(--away); text-shadow: 0 0 16px var(--away-glow); font-size: clamp(14px, 2vw, 22px);">00:00</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AWAY TEAM -->
+  <div class="sb-team" id="sb-away-team">
+    <div class="sb-team-name away" id="sb-away-name">AWAY TEAM</div>
+    <div class="sb-score away" id="sb-away-score">0</div>
+    <div class="sb-timeouts" id="sb-away-timeouts"></div>
+    <div class="sb-penalty-badge" id="sb-away-penalty" style="display:none;"></div>
+  </div>
+
+</div>
+
+<!-- ROSTERS -->
+<div class="sb-rosters">
+  <div class="sb-roster-panel home-panel">
+    <div class="sb-roster-head">
+      <div class="sb-roster-head-title" id="sb-home-roster-title">HOME TEAM ROSTER</div>
+      <div class="sb-roster-fouls">TEAM FOULS <span id="sb-home-fouls">0</span></div>
+    </div>
+    <div id="sb-home-roster"></div>
+  </div>
+  <div class="sb-roster-panel away-panel">
+    <div class="sb-roster-head">
+      <div class="sb-roster-head-title" id="sb-away-roster-title">AWAY TEAM ROSTER</div>
+      <div class="sb-roster-fouls">TEAM FOULS <span id="sb-away-fouls">0</span></div>
+    </div>
+    <div id="sb-away-roster"></div>
+  </div>
+</div>
+
+<!-- SCRIPT -->
+<script>
+/* ============================================================
+   SCOREBOARD.JS — Read-Only Renderer + Sync Subscriber
+   ============================================================ */
+
+const STATE_KEY   = 'wmmf_state';
+const CHANNEL_NAME = 'wmmf_sync';
+const MAX_TIMEOUTS = 3;
+
+function formatTime(s) {
+  const m = Math.floor(Math.max(0, s) / 60);
+  const sec = Math.max(0, s) % 60;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── State ── */
+let _state = null;
+let _prevHomeScore = 0, _prevAwayScore = 0;
+let _matchInterval = null, _homePenaltyInterval = null, _awayPenaltyInterval = null;
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+/* ── Render ── */
+function render(state) {
+  if (!state) return;
+
+  // ── Match clock local tick (from this tab if clock is running)
+  // Managed by syncClocks() below
+
+  // ── Team names ──
+  setText('sb-home-name', state.homeTeam.name);
+  setText('sb-away-name', state.awayTeam.name);
+  setText('sb-home-roster-title', `${state.homeTeam.name} ROSTER`);
+  setText('sb-away-roster-title', `${state.awayTeam.name} ROSTER`);
+
+  // ── Scores (with pop animation) ──
+  const hScoreEl = document.getElementById('sb-home-score');
+  const aScoreEl = document.getElementById('sb-away-score');
+  if (hScoreEl && state.homeTeam.score !== _prevHomeScore) {
+    hScoreEl.textContent = state.homeTeam.score;
+    hScoreEl.classList.remove('score-changed'); void hScoreEl.offsetWidth;
+    hScoreEl.classList.add('score-changed');
+    _prevHomeScore = state.homeTeam.score;
+  }
+  if (aScoreEl && state.awayTeam.score !== _prevAwayScore) {
+    aScoreEl.textContent = state.awayTeam.score;
+    aScoreEl.classList.remove('score-changed'); void aScoreEl.offsetWidth;
+    aScoreEl.classList.add('score-changed');
+    _prevAwayScore = state.awayTeam.score;
+  }
+
+  // ── Clocks ──
+  setText('sb-match-clock',   formatTime(state.matchClock.seconds));
+  if (state.homePenaltyClock) {
+    setText('sb-home-penalty-clock', formatTime(state.homePenaltyClock.seconds));
+  }
+  if (state.awayPenaltyClock) {
+    setText('sb-away-penalty-clock', formatTime(state.awayPenaltyClock.seconds));
+  }
+
+  // ── Timeouts ──
+  renderTimeouts('sb-home-timeouts', state.homeTeam.timeouts, 'home');
+  renderTimeouts('sb-away-timeouts', state.awayTeam.timeouts, 'away');
+
+  // ── Fouls ──
+  setText('sb-home-fouls', state.homeTeam.fouls);
+  setText('sb-away-fouls', state.awayTeam.fouls);
+
+  // ── Penalties ──
+  renderPenaltyBadge('sb-home-penalty', state.homeTeam.penalty);
+  renderPenaltyBadge('sb-away-penalty', state.awayTeam.penalty);
+
+  // ── Rosters ──
+  renderRoster('sb-home-roster', state.homeTeam.roster, state.dotMode, 'home');
+  renderRoster('sb-away-roster', state.awayTeam.roster, state.dotMode, 'away');
+
+  // ── Sync clocks ──
+  syncClocks(state);
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function renderTimeouts(id, count, team) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = Array.from({ length: MAX_TIMEOUTS }, (_, i) =>
+    `<div class="sb-timeout-dot ${team} ${i < count ? 'used' : ''}"></div>`
+  ).join('');
+}
+
+function renderPenaltyBadge(id, penalty) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!penalty || penalty === 'NONE') {
+    el.style.display = 'none';
+  } else {
+    el.style.display = 'inline-block';
+    el.textContent = penalty + ' PENALTY';
+  }
+}
+
+function renderRoster(id, roster, dotMode, team) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!roster || roster.length === 0) {
+    el.innerHTML = '<div style="padding:12px 14px;font-size:11px;color:var(--text-muted);">No players added</div>';
+    return;
+  }
+  el.innerHTML = roster.map((p, i) => `
+    <div class="sb-player-row">
+      <div class="sb-player-num">P${i+1}</div>
+      <div class="sb-player-name">${escHtml(p.name)}</div>
+      <div class="sb-dots">
+        ${dotMode === 'dots'
+          ? Array.from({ length: 8 }, (_, di) =>
+              `<div class="sb-dot ${team} ${di < p.fouls ? 'filled' : ''}"></div>`
+            ).join('')
+          : `<div class="sb-foul-num">${p.fouls}</div>`
+        }
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ── Local clock ticking (mirrors AdminPage clock) ── */
+function syncClocks(state) {
+  // Match clock
+  if (state.matchClock.running && !_matchInterval) {
+    _matchInterval = setInterval(() => {
+      const s = loadState();
+      if (s) setText('sb-match-clock', formatTime(s.matchClock.seconds));
+      else clearInterval(_matchInterval);
+    }, 500);
+  } else if (!state.matchClock.running && _matchInterval) {
+    clearInterval(_matchInterval);
+    _matchInterval = null;
+  }
+  // Home penalty clock
+  if (state.homePenaltyClock && state.homePenaltyClock.running && !_homePenaltyInterval) {
+    _homePenaltyInterval = setInterval(() => {
+      const s = loadState();
+      if (s && s.homePenaltyClock) setText('sb-home-penalty-clock', formatTime(s.homePenaltyClock.seconds));
+      else clearInterval(_homePenaltyInterval);
+    }, 500);
+  } else if ((!state.homePenaltyClock || !state.homePenaltyClock.running) && _homePenaltyInterval) {
+    clearInterval(_homePenaltyInterval);
+    _homePenaltyInterval = null;
+  }
+  // Away penalty clock
+  if (state.awayPenaltyClock && state.awayPenaltyClock.running && !_awayPenaltyInterval) {
+    _awayPenaltyInterval = setInterval(() => {
+      const s = loadState();
+      if (s && s.awayPenaltyClock) setText('sb-away-penalty-clock', formatTime(s.awayPenaltyClock.seconds));
+      else clearInterval(_awayPenaltyInterval);
+    }, 500);
+  } else if ((!state.awayPenaltyClock || !state.awayPenaltyClock.running) && _awayPenaltyInterval) {
+    clearInterval(_awayPenaltyInterval);
+    _awayPenaltyInterval = null;
+  }
+}
+
+/* ── Sync indicator ── */
+function setSync(ok) {
+  const dot = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  if (dot) dot.className = 'sync-dot' + (ok ? '' : ' stale');
+  if (label) label.textContent = ok ? 'SYNCED' : 'WAITING…';
+}
+
+/* ── Subscriptions ── */
+// BroadcastChannel (same-origin, instant)
+if (typeof BroadcastChannel !== 'undefined') {
+  const ch = new BroadcastChannel(CHANNEL_NAME);
+  ch.onmessage = (e) => {
+    if (e.data?.type === 'STATE_UPDATE') {
+      _state = e.data.state;
+      render(_state);
+      setSync(true);
+    }
+  };
+}
+
+// Storage event (other tabs)
+window.addEventListener('storage', (e) => {
+  if (e.key === STATE_KEY && e.newValue) {
+    try {
+      _state = JSON.parse(e.newValue);
+      render(_state);
+      setSync(true);
+    } catch {}
+  }
+});
+
+// Initial render
+_state = loadState();
+if (_state) {
+  _prevHomeScore = _state.homeTeam.score;
+  _prevAwayScore = _state.awayTeam.score;
+  render(_state);
+  setSync(true);
+} else {
+  setSync(false);
+}
+</script>
+</body>
+</html>

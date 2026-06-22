@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WMMF Match Clock — Admin Console</title>
+  <meta name="description"
+    content="WMMF Live Stream Scoreboard Control Console — manage scores, clocks, rosters and export match history." />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ── Admin-only overrides ─────────────────────────── */
+    .center-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .score-pop-target {
+      display: inline-block;
+    }
+
+    /* ── Card Tracking Columns ───────────────────────── */
+    .cards-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .cards-col-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px 6px;
+    }
+
+    .cards-col-accent {
+      width: 3px;
+      height: 28px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .cards-col-title {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .card-type-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .card-type-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .card-chip {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 900;
+      flex-shrink: 0;
+      color: #000;
+    }
+
+    .yellow-chip {
+      background: #f5c518;
+    }
+
+    .blue-chip {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    .red-chip {
+      background: var(--penalty);
+      color: #fff;
+    }
+
+    .card-entries {
+      padding: 4px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-height: 0;
+    }
+
+    .card-entry {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 4px;
+      border-radius: 5px;
+      transition: background 0.15s;
+    }
+
+    .card-entry:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .card-entry-num {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text);
+      flex: 1;
+      min-width: 0;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid transparent;
+      padding: 1px 2px;
+      transition: border-color 0.15s;
+    }
+
+    .card-entry-num:focus {
+      border-bottom-color: rgba(255, 255, 255, 0.25);
+      outline: none;
+    }
+
+    .card-entry-num::placeholder {
+      color: var(--text-muted);
+    }
+
+    .card-entry-del {
+      width: 20px;
+      height: 20px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: rgba(255, 59, 59, 0.35);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+
+    .card-entry-del:hover {
+      color: var(--penalty);
+      background: var(--penalty-dim);
+    }
+
+    .card-add-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      padding: 6px 10px;
+      background: transparent;
+      border: none;
+      border-top: 1px dashed rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+
+    .card-add-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    /* ── Modal Dialog Styles ─────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .modal-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      width: 90%;
+      max-width: 400px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+      animation: scaleUp 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    .modal-header h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--text);
+    }
+
+    .modal-close {
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 22px;
+      cursor: pointer;
+      line-height: 1;
+      transition: var(--transition);
+    }
+
+    .modal-close:hover {
+      color: var(--text);
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    .modal-body p {
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .modal-actions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .modal-action-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 10px;
+      border-radius: var(--radius-md);
+      transition: var(--transition);
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .modal-action-btn strong {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+
+    .modal-action-btn span {
+      font-size: 9px;
+      opacity: 0.75;
+      text-align: center;
+    }
+
+    .spp-btn {
+      background: var(--home-dim);
+      border: 1px solid rgba(0, 200, 255, 0.3);
+      color: var(--home);
+    }
+
+    .spp-btn:hover {
+      background: var(--home);
+      color: #000;
+      box-shadow: 0 0 16px var(--home-glow);
+    }
+
+    .lpp-btn {
+      background: var(--away-dim);
+      border: 1px solid rgba(255, 140, 0, 0.3);
+      color: var(--away);
+    }
+
+    .lpp-btn:hover {
+      background: var(--away);
+      color: #000;
+      box-shadow: 0 0 16px var(--away-glow);
+    }
+
+    /* ── Confirmation Dialog Styles ────────────────── */
+    .confirm-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      animation: fadeIn 0.15s ease;
+    }
+
+    .confirm-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      width: 90%;
+      max-width: 380px;
+      overflow: hidden;
+      box-shadow: 0 10px 50px rgba(0, 0, 0, 0.7);
+      animation: scaleUp 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .confirm-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 59, 59, 0.06);
+    }
+
+    .confirm-header .confirm-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--penalty-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .confirm-header .confirm-icon svg {
+      width: 16px;
+      height: 16px;
+      color: var(--penalty);
+    }
+
+    .confirm-header h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--penalty);
+      margin: 0;
+    }
+
+    .confirm-body {
+      padding: 20px;
+    }
+
+    .confirm-body p {
+      font-size: 13px;
+      color: var(--text-sub);
+      line-height: 1.5;
+      text-align: center;
+      margin: 0;
+    }
+
+    .confirm-footer {
+      display: flex;
+      gap: 10px;
+      padding: 12px 20px 16px;
+      justify-content: flex-end;
+    }
+
+    .confirm-btn {
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .confirm-btn-cancel {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .confirm-btn-cancel:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+
+    .confirm-btn-danger {
+      background: var(--penalty);
+      border: 1px solid var(--penalty);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(255, 59, 59, 0.25);
+    }
+
+    .confirm-btn-danger:hover {
+      background: #ff4444;
+      box-shadow: 0 0 20px rgba(255, 59, 59, 0.4);
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes scaleUp {
+      from {
+        transform: scale(0.95);
+        opacity: 0;
+      }
+
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+
+<body id="admin-page">
+
+  <!-- ═══════════════════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════════════════════ -->
+  <!-- <header class="app-header">
+    <div class="header-brand">
+      <div class="brand-logo">MMF</div>
+      <div class="brand-text">
+        <h1>MMF MATCHUP MATCH CLOCK</h1>
+        <p>WMMF LIVE STREAM SCOREBOARD CONTROL CONSOLE</p>
+      </div>
+      <div class="live-badge" id="live-badge">
+        <span class="live-dot"></span>
+        LIVE SYNCED
+      </div>
+    </div>
+    <nav class="header-nav">
+      <a href="index.html" class="nav-btn active" id="nav-admin">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+        Interactive Scoreboard
+      </a>
+      <a href="scoreboard.html" class="nav-btn" target="_blank" id="nav-scoreboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="16 18 22 12 16 6" />
+          <polyline points="8 6 2 12 8 18" />
+        </svg>
+        Streaming Scoreboard
+      </a>
+    </nav>
+  </header> -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+     TOOLBAR
+════════════════════════════════════════════════════════════ -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+      </svg>
+      CUSTOMIZE MODE:
+      <div class="toggle-group">
+        <button class="toggle-btn active" id="toggle-dots" onclick="setDotMode('dots')">8 Lites (Dots)</button>
+        <button class="toggle-btn" id="toggle-numeric" onclick="setDotMode('numeric')">Numeric Box</button>
+      </div>
+    </div>
+    <h1 style="color:#f5c518">WMMF</h1>
+
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="log-event-btn" onclick="logCustomEvent()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="12" y1="18" x2="12" y2="12" />
+          <line x1="9" y1="15" x2="15" y2="15" />
+        </svg>
+        Log Event
+      </button>
+      <button class="reset-btn" onclick="confirmReset()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="1 4 1 10 7 10" />
+          <path d="M3.51 15a9 9 0 1 0 .49-3.5" />
+        </svg>
+        Reset Match &amp; Foul Boards
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+     MAIN GRID
+════════════════════════════════════════════════════════════ -->
+  <div class="main-grid">
+
+    <!-- ── HOME TEAM ──────────────────────────────────────── -->
+    <div class="card card-home">
+      <div class="team-name-wrapper">
+        <input class="team-name-input" id="home-name" type="text" value="HOME TEAM"
+          onchange="updateTeamName('homeTeam', this.value)" />
+        <button class="edit-icon-btn" onclick="document.getElementById('home-name').focus()" title="Edit name">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="score-label">TEAM SCORE</div>
+      <div class="score-row">
+        <button class="counter-btn" onclick="changeScore('homeTeam', -1)" title="Decrease score">−</button>
+        <div class="score-display home score-pop-target" id="home-score">0</div>
+        <button class="counter-btn" onclick="changeScore('homeTeam', 1)" title="Increase score">+</button>
+      </div>
+
+      <div class="sub-row">
+        <div class="sub-block">
+          <div class="sub-label">TIME OUTS LEFT</div>
+          <div class="mini-counter">
+            <button class="mini-btn" onclick="changeTimeout('homeTeam', -1)">−</button>
+            <span class="mini-val" id="home-timeouts-val">3</span>
+            <button class="mini-btn" onclick="changeTimeout('homeTeam', 1)">+</button>
+          </div>
+        </div>
+        <!-- <div class="sub-block">
+        <div class="sub-label">SHOW PENALTY</div>
+        <select class="penalty-select" id="home-penalty" onchange="changePenalty('homeTeam', this.value)">
+          <option value="NONE">● NONE</option>
+          <option value="MINOR">⚠ MINOR</option>
+          <option value="MAJOR">🚨 MAJOR</option>
+          <option value="MISCONDUCT">❌ MISCONDUCT</option>
+        </select>
+      </div> -->
+      </div>
+    </div>
+
+    <!-- ── CENTER COLUMN ─────────────────────────────────── -->
+    <div class="center-col">
+
+      <!-- Match Clock -->
+      <div class="card card-clock">
+        <div class="card-label">MATCH CLOCK</div>
+        <div class="clock-display" id="match-clock-display">10:00</div>
+        <div class="clock-controls">
+          <button class="clock-btn-primary" id="match-clock-btn" onclick="ClockEngine.toggleMatch()">
+            ▶ START TIMER
+          </button>
+          <button class="clock-reset-btn"
+            onclick="confirmAction('Reset match clock to 10:00?', () => ClockEngine.resetMatch())" title="Reset clock">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="1 4 1 10 7 10" />
+              <path d="M3.51 15a9 9 0 1 0 .49-3.5" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Twin Penalty Clocks -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; width: 100%;">
+        <!-- Home Penalty Clock (Left) -->
+        <div class="card card-penalty penalty-card"
+          style="border-top-color: var(--home); margin-top: 0; padding: 12px; display: flex; flex-direction: column; align-items: center;">
+          <div class="card-label" style="color: var(--home); font-size: 8px; letter-spacing: 1px; margin-bottom: 2px;">
+            <span id="home-roster-penalty">HOME</span> <span>PENALTY</span>
+          </div>
+          <div class="clock-display penalty-clock" id="home-penalty-clock-display"
+            style="font-size: 24px; margin: 4px 0 4px; text-shadow: 0 0 16px var(--home-glow); color: var(--home);">
+            00:00</div>
+          <div id="home-penalty-queue"
+            style="font-size: 9px; font-weight: 700; color: var(--text-muted); text-align: center; height: 14px; margin-bottom: 6px;">
+          </div>
+
+          <!-- SPP / LPP Trigger Buttons -->
+          <div style="display: flex; gap: 6px; margin-bottom: 8px; width: 100%; justify-content: center;">
+            <button onclick="ClockEngine.pushPenalty('homePenaltyClock', 30)" title="Short Penalty Punishment — 30s"
+              style="flex: 1; padding: 5px 4px; border-radius: 6px; border: 1.5px solid rgba(0,200,255,0.4); background: rgba(0,200,255,0.10); color: var(--home); font-family: inherit; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; align-items: center; gap: 1px;"
+              onmouseover="this.style.background='var(--home)';this.style.color='#000';"
+              onmouseout="this.style.background='rgba(0,200,255,0.10)';this.style.color='var(--home)';">
+              SPP<span style="font-size: 9px; opacity: 0.8; font-weight: 700;">:30</span>
+            </button>
+            <button onclick="ClockEngine.pushPenalty('homePenaltyClock', 60)" title="Long Penalty Punishment — 60s"
+              style="flex: 1; padding: 5px 4px; border-radius: 6px; border: 1.5px solid rgba(255,59,59,0.4); background: rgba(255,59,59,0.10); color: var(--penalty); font-family: inherit; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; align-items: center; gap: 1px;"
+              onmouseover="this.style.background='var(--penalty)';this.style.color='#fff';"
+              onmouseout="this.style.background='rgba(255,59,59,0.10)';this.style.color='var(--penalty)';">
+              LPP<span style="font-size: 9px; opacity: 0.8; font-weight: 700;">:60</span>
+            </button>
+          </div>
+
+          <!-- Play/Pause & Reset -->
+          <div class="clock-controls" style="width: 100%; display: flex; justify-content: center; gap: 6px;">
+            <button class="clock-btn-primary penalty-btn" id="home-penalty-clock-btn"
+              onclick="ClockEngine.toggleHomePenalty()"
+              style="padding: 6px 12px; height: 28px; background: var(--home); color: #000; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+            </button>
+            <button class="clock-reset-btn"
+              onclick="confirmAction('Reset home penalty clock?', () => ClockEngine.resetHomePenalty())"
+              title="Reset home penalty" style="width: 28px; height: 28px; border-radius: 4px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                style="width: 12px; height: 12px;">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 .49-3.5" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Away Penalty Clock (Right) -->
+        <div class="card card-penalty penalty-card"
+          style="border-top-color: var(--away); margin-top: 0; padding: 12px; display: flex; flex-direction: column; align-items: center;">
+          <div class="card-label" style="color: var(--away); font-size: 8px; letter-spacing: 1px; margin-bottom: 2px;">
+            <span id="away-roster-penalty">AWAY</span> <span>PENALTY</span>
+          </div>
+          <div class="clock-display penalty-clock" id="away-penalty-clock-display"
+            style="font-size: 24px; margin: 4px 0 4px; text-shadow: 0 0 16px var(--away-glow); color: var(--away);">
+            00:00</div>
+          <div id="away-penalty-queue"
+            style="font-size: 9px; font-weight: 700; color: var(--text-muted); text-align: center; height: 14px; margin-bottom: 6px;">
+          </div>
+
+          <!-- SPP / LPP Trigger Buttons -->
+          <div style="display: flex; gap: 6px; margin-bottom: 8px; width: 100%; justify-content: center;">
+            <button onclick="ClockEngine.pushPenalty('awayPenaltyClock', 30)" title="Short Penalty Punishment — 30s"
+              style="flex: 1; padding: 5px 4px; border-radius: 6px; border: 1.5px solid rgba(255,140,0,0.4); background: rgba(255,140,0,0.10); color: var(--away); font-family: inherit; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; align-items: center; gap: 1px;"
+              onmouseover="this.style.background='var(--away)';this.style.color='#000';"
+              onmouseout="this.style.background='rgba(255,140,0,0.10)';this.style.color='var(--away)';">
+              SPP<span style="font-size: 9px; opacity: 0.8; font-weight: 700;">:30</span>
+            </button>
+            <button onclick="ClockEngine.pushPenalty('awayPenaltyClock', 60)" title="Long Penalty Punishment — 60s"
+              style="flex: 1; padding: 5px 4px; border-radius: 6px; border: 1.5px solid rgba(255,59,59,0.4); background: rgba(255,59,59,0.10); color: var(--penalty); font-family: inherit; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; align-items: center; gap: 1px;"
+              onmouseover="this.style.background='var(--penalty)';this.style.color='#fff';"
+              onmouseout="this.style.background='rgba(255,59,59,0.10)';this.style.color='var(--penalty)';">
+              LPP<span style="font-size: 9px; opacity: 0.8; font-weight: 700;">:60</span>
+            </button>
+          </div>
+
+          <!-- Play/Pause & Reset -->
+          <div class="clock-controls" style="width: 100%; display: flex; justify-content: center; gap: 6px;">
+            <button class="clock-btn-primary penalty-btn" id="away-penalty-clock-btn"
+              onclick="ClockEngine.toggleAwayPenalty()"
+              style="padding: 6px 12px; height: 28px; background: var(--away); color: #000; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+            </button>
+            <button class="clock-reset-btn"
+              onclick="confirmAction('Reset away penalty clock?', () => ClockEngine.resetAwayPenalty())"
+              title="Reset away penalty" style="width: 28px; height: 28px; border-radius: 4px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                style="width: 12px; height: 12px;">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 .49-3.5" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /center-col -->
+
+    <!-- ── AWAY TEAM ──────────────────────────────────────── -->
+    <div class="card card-away">
+      <div class="team-name-wrapper">
+        <input class="team-name-input away" id="away-name" type="text" value="AWAY TEAM"
+          onchange="updateTeamName('awayTeam', this.value)" />
+        <button class="edit-icon-btn" onclick="document.getElementById('away-name').focus()" title="Edit name">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="score-label">TEAM SCORE</div>
+      <div class="score-row">
+        <button class="counter-btn" onclick="changeScore('awayTeam', -1)" title="Decrease score">−</button>
+        <div class="score-display away score-pop-target" id="away-score">0</div>
+        <button class="counter-btn" onclick="changeScore('awayTeam', 1)" title="Increase score">+</button>
+      </div>
+
+      <div class="sub-row">
+        <div class="sub-block">
+          <div class="sub-label">TIME OUTS LEFT</div>
+          <div class="mini-counter">
+            <button class="mini-btn" onclick="changeTimeout('awayTeam', -1)">−</button>
+            <span class="mini-val" id="away-timeouts-val">3</span>
+            <button class="mini-btn" onclick="changeTimeout('awayTeam', 1)">+</button>
+          </div>
+        </div>
+        <!-- <div class="sub-block">
+          <div class="sub-label">SHOW PENALTY</div>
+          <select class="penalty-select" id="away-penalty" onchange="changePenalty('awayTeam', this.value)">
+            <option value="NONE">● NONE</option>
+            <option value="MINOR">⚠ MINOR</option>
+            <option value="MAJOR">🚨 MAJOR</option>
+            <option value="MISCONDUCT">❌ MISCONDUCT</option>
+          </select>
+        </div> -->
+      </div>
+    </div>
+
+  </div><!-- /main-grid -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+     ROSTER PANELS
+════════════════════════════════════════════════════════════ -->
+  <div class="roster-grid" style="grid-template-columns:1fr 200px 200px 1fr;">
+
+    <!-- HOME ROSTER -->
+    <div class="roster-card">
+      <div class="roster-header">
+        <div class="roster-title-block">
+          <div class="roster-accent-bar"></div>
+          <div class="roster-title-text">
+            <small>TEAM ROSTER</small>
+            <strong id="home-roster-title">HOME TEAM</strong>
+          </div>
+        </div>
+        <div class="fouls-badge">
+          TEAM FOULS
+          <span class="fouls-count" id="home-fouls-count">0</span>
+        </div>
+      </div>
+      <div class="roster-body" id="home-roster-list">
+        <!-- Rendered by JS -->
+      </div>
+      <button class="add-player-btn" onclick="addPlayer('homeTeam')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="16" />
+          <line x1="8" y1="12" x2="16" y2="12" />
+        </svg>
+        Add Player
+      </button>
+    </div>
+
+    <!-- ── HOME CARDS COLUMN ──────────────────────────────── -->
+    <div class="cards-column" id="home-cards-col">
+      <div class="cards-col-header">
+        <div class="cards-col-accent" style="background:var(--home);"></div>
+        <span class="cards-col-title">HOME CARDS</span>
+      </div>
+
+      <!-- Yellow -->
+      <div class="card-type-box">
+        <div class="card-type-label">
+          <span class="card-chip yellow-chip">Y</span>
+          YELLOW CARDS
+        </div>
+        <div class="card-entries" id="home-yellow-entries"></div>
+        <button class="card-add-btn" onclick="addCardEntry('home','yellow')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Player #
+        </button>
+      </div>
+
+      <!-- Blue -->
+      <div class="card-type-box">
+        <div class="card-type-label">
+          <span class="card-chip blue-chip">B</span>
+          BLUE CARDS
+        </div>
+        <div class="card-entries" id="home-blue-entries"></div>
+        <button class="card-add-btn" onclick="addCardEntry('home','blue')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Player #
+        </button>
+      </div>
+
+      <!-- Red -->
+      <div class="card-type-box">
+        <div class="card-type-label">
+          <span class="card-chip red-chip">R</span>
+          RED CARDS
+        </div>
+        <div class="card-entries" id="home-red-entries"></div>
+        <button class="card-add-btn" onclick="addCardEntry('home','red')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Player #
+        </button>
+      </div>
+    </div>
+
+    <!-- ── AWAY CARDS COLUMN ──────────────────────────────── -->
+    <div class="cards-column" id="away-cards-col">
+      <div class="cards-col-header">
+        <div class="cards-col-accent" style="background:var(--away);"></div>
+        <span class="cards-col-title">AWAY CARDS</span>
+      </div>
+
+      <!-- Yellow -->
+      <div class="card-type-box">
+        <div class="card-type-label">
+          <span class="card-chip yellow-chip">Y</span>
+          YELLOW CARDS
+        </div>
+        <div class="card-entries" id="away-yellow-entries"></div>
+        <button class="card-add-btn" onclick="addCardEntry('away','yellow')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Player #
+        </button>
+      </div>
+
+      <!-- Blue -->
+      <div class="card-type-box">
+        <div class="card-type-label">
+          <span class="card-chip blue-chip">B</span>
+          BLUE CARDS
+        </div>
+        <div class="card-entries" id="away-blue-entries"></div>
+        <button class="card-add-btn" onclick="addCardEntry('away','blue')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Player #
+        </button>
+      </div>
+
+      <!-- Red -->
+      <div class="card-type-box">
+        <div class="card-type-label">
+          <span class="card-chip red-chip">R</span>
+          RED CARDS
+        </div>
+        <div class="card-entries" id="away-red-entries"></div>
+        <button class="card-add-btn" onclick="addCardEntry('away','red')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Player #
+        </button>
+      </div>
+    </div>
+
+    <!-- AWAY ROSTER -->
+    <div class="roster-card">
+      <div class="roster-header">
+        <div class="roster-title-block">
+          <div class="roster-accent-bar away"></div>
+          <div class="roster-title-text">
+            <small>TEAM ROSTER</small>
+            <strong id="away-roster-title">AWAY TEAM</strong>
+          </div>
+        </div>
+        <div class="fouls-badge">
+          TEAM FOULS
+          <span class="fouls-count" id="away-fouls-count">0</span>
+        </div>
+      </div>
+      <div class="roster-body" id="away-roster-list">
+        <!-- Rendered by JS -->
+      </div>
+      <button class="add-player-btn" onclick="addPlayer('awayTeam')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="16" />
+          <line x1="8" y1="12" x2="16" y2="12" />
+        </svg>
+        Add Player
+      </button>
+    </div>
+
+  </div><!-- /roster-grid -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+     BOTTOM BAR (Export + Log)
+════════════════════════════════════════════════════════════ -->
+  <div class="bottom-bar">
+    <button class="export-btn" onclick="exportPDF()" id="export-pdf-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="12" y1="18" x2="12" y2="12" />
+        <line x1="9" y1="15" x2="15" y2="15" />
+      </svg>
+      Export Match History to PDF
+    </button>
+
+    <button class="log-event-btn" onclick="window.open('scoreboard.html','_blank')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        <polyline points="15 3 21 3 21 9" />
+        <line x1="10" y1="14" x2="21" y2="3" />
+      </svg>
+      Open Streaming Scoreboard
+    </button>
+
+    <div style="margin-left:auto;font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+      <span id="event-count">0 events logged</span>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+     SCRIPT
+════════════════════════════════════════════════════════════ -->
+  <script src="app.js"></script>
+  <script>
+    /* ── Admin-page extras ───────────────────────────────── */
+
+    /* ── Confirmation Dialog Engine ─────────────────────── */
+    let _confirmCallback = null;
+
+    function confirmAction(message, callback) {
+      const overlay = document.getElementById('confirm-dialog-overlay');
+      const msgEl = document.getElementById('confirm-dialog-message');
+      if (!overlay || !msgEl) {
+        // Fallback to native confirm if modal not available
+        if (confirm(message)) callback();
+        return;
+      }
+      msgEl.textContent = message;
+      _confirmCallback = callback;
+      overlay.style.display = 'flex';
+    }
+
+    function _closeConfirmDialog() {
+      const overlay = document.getElementById('confirm-dialog-overlay');
+      if (overlay) overlay.style.display = 'none';
+      _confirmCallback = null;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('confirm-ok-btn')?.addEventListener('click', () => {
+        if (_confirmCallback) _confirmCallback();
+        _closeConfirmDialog();
+      });
+      document.getElementById('confirm-cancel-btn')?.addEventListener('click', () => {
+        _closeConfirmDialog();
+      });
+      // Close on overlay click (outside the box)
+      document.getElementById('confirm-dialog-overlay')?.addEventListener('click', (e) => {
+        if (e.target.id === 'confirm-dialog-overlay') _closeConfirmDialog();
+      });
+      // Close on Escape key
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.getElementById('confirm-dialog-overlay')?.style.display === 'flex') {
+          _closeConfirmDialog();
+        }
+      });
+    });
+
+    function setDotMode(mode) {
+      StateManager.update({ dotMode: mode });
+    }
+
+    function updateTeamName(team, name) {
+      const s = StateManager.getState();
+      StateManager.update({ [team]: { ...s[team], name } });
+      const key = team === 'homeTeam' ? 'home' : 'away';
+      const rosterEl = document.getElementById(`${key}-roster-title`);
+      if (rosterEl) rosterEl.textContent = name;
+      const penaltyEl = document.getElementById(`${key}-roster-penalty`);
+      if (penaltyEl) penaltyEl.textContent = name;
+    }
+
+    function confirmReset() {
+      confirmAction(
+        'Reset ALL match data including scores, clocks, fouls and roster? This cannot be undone.',
+        () => StateManager.resetAll()
+      );
+    }
+
+    function logCustomEvent() {
+      const msg = prompt('Enter a custom event description:');
+      if (msg?.trim()) _logEvent(msg.trim());
+    }
+
+    /* ── Score pop animation ─────────────────────────────── */
+    let _prevHome = 0, _prevAway = 0;
+    const _origRenderAdmin = typeof renderAdmin !== 'undefined' ? renderAdmin : null;
+
+    // Override subscribe callback to add animations
+    document.addEventListener('DOMContentLoaded', () => {
+      StateManager.subscribe((state) => {
+        // Score pop animation
+        const hEl = document.getElementById('home-score');
+        const aEl = document.getElementById('away-score');
+        if (hEl && state.homeTeam.score !== _prevHome) {
+          hEl.classList.remove('score-pop');
+          void hEl.offsetWidth; // reflow
+          hEl.classList.add('score-pop');
+          _prevHome = state.homeTeam.score;
+        }
+        if (aEl && state.awayTeam.score !== _prevAway) {
+          aEl.classList.remove('score-pop');
+          void aEl.offsetWidth;
+          aEl.classList.add('score-pop');
+          _prevAway = state.awayTeam.score;
+        }
+
+        // Update event count
+        const ec = document.getElementById('event-count');
+        if (ec) ec.textContent = `${state.matchHistory.length} event${state.matchHistory.length !== 1 ? 's' : ''} logged`;
+
+        // Update card dropdowns if roster changes
+        renderAllCards();
+      });
+
+      /* ── Card Tracking ───────────────────────────────── */
+      renderAllCards();
+    });
+
+    /* ── CARD STATE ─────────────────────────────────────── */
+    // Cards stored in localStorage separately so they don't
+    // interfere with the main StateManager state shape.
+    const CARDS_KEY = 'wmmf_cards';
+
+    function loadCards() {
+      try {
+        return JSON.parse(localStorage.getItem(CARDS_KEY)) || defaultCards();
+      } catch { return defaultCards(); }
+    }
+
+    function defaultCards() {
+      return {
+        home: { yellow: [], blue: [], red: [] },
+        away: { yellow: [], blue: [], red: [] }
+      };
+    }
+
+    function saveCards(cards) {
+      localStorage.setItem(CARDS_KEY, JSON.stringify(cards));
+      // Broadcast to other tabs
+      if (typeof BroadcastChannel !== 'undefined') {
+        const ch = new BroadcastChannel('wmmf_cards_sync');
+        ch.postMessage({ type: 'CARDS_UPDATE', cards });
+        ch.close();
+      }
+    }
+
+    // Listen for card updates from other tabs
+    window.addEventListener('storage', (e) => {
+      if (e.key === CARDS_KEY && e.newValue) {
+        try { renderAllCards(); } catch { }
+      }
+    });
+    if (typeof BroadcastChannel !== 'undefined') {
+      const _cardsCh = new BroadcastChannel('wmmf_cards_sync');
+      _cardsCh.onmessage = (e) => {
+        if (e.data?.type === 'CARDS_UPDATE') renderAllCards();
+      };
+    }
+
+    /* ── ADD / DELETE ────────────────────────────────────── */
+    function addCardEntry(team, cardType) {
+      const cards = loadCards();
+      cards[team][cardType].push({ id: Math.random().toString(36).slice(2, 8), playerNum: '' });
+      saveCards(cards);
+      renderAllCards();
+    }
+
+    function addCardForPlayer(team, playerNum, cardType) {
+      const cards = loadCards();
+      cards[team][cardType].push({ id: Math.random().toString(36).slice(2, 8), playerNum: String(playerNum) });
+      saveCards(cards);
+      renderAllCards();
+    }
+
+    function deleteCardEntry(team, cardType, id) {
+      confirmAction('Delete this card entry?', () => {
+        const cards = loadCards();
+        cards[team][cardType] = cards[team][cardType].filter(e => e.id !== id);
+        saveCards(cards);
+        renderAllCards();
+      });
+    }
+
+    function updateCardNum(team, cardType, id, val) {
+      const cards = loadCards();
+      const entry = cards[team][cardType].find(e => e.id === id);
+      if (entry) entry.playerNum = val;
+      saveCards(cards);
+      // no full re-render (input is focused)
+    }
+
+    /* ── RENDER ──────────────────────────────────────────── */
+    function renderAllCards() {
+      const cards = loadCards();
+      ['home', 'away'].forEach(team => {
+        ['yellow', 'blue', 'red'].forEach(type => {
+          renderCardEntries(team, type, cards[team][type]);
+        });
+      });
+    }
+
+    function renderCardEntries(team, type, entries) {
+      const el = document.getElementById(`${team}-${type}-entries`);
+      if (!el) return;
+      const focused = document.activeElement?.dataset?.cardId;
+
+      const state = StateManager.getState();
+      const roster = state[team + 'Team']?.roster || [];
+
+      el.innerHTML = entries.map(e => `
+      <div class="card-entry">
+        <select
+          class="card-entry-num"
+          data-card-id="${e.id}"
+          onchange="updateCardNum('${team}','${type}','${e.id}',this.value)"
+        >
+          <option value="" disabled ${!e.playerNum ? 'selected' : ''}>Select Player</option>
+          ${roster.map(p => `<option value="${p.id}" ${e.playerNum === p.id ? 'selected' : ''}>${escHtml(p.name)}</option>`).join('')}
+        </select>
+        <button class="card-entry-del"
+          onclick="deleteCardEntry('${team}','${type}','${e.id}')"
+          title="Remove">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    `).join('');
+      // Restore focus if needed
+      if (focused) {
+        const inp = el.querySelector(`[data-card-id="${focused}"]`);
+        inp?.focus();
+      }
+    }
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /* ── PENALTY DIALOG FUNCTIONS ─────────────────────────── */
+    let _penaltyTargetTeam = null;
+    let _penaltyTargetPlayerId = null;
+
+    function openPenaltyDialog(team, playerId) {
+      _penaltyTargetTeam = team;
+      _penaltyTargetPlayerId = playerId;
+
+      const state = StateManager.getState();
+      const t = state[team];
+      const player = t.roster.find(p => p.id === playerId);
+
+      const infoEl = document.getElementById('penalty-dialog-player-info');
+      if (infoEl && player) {
+        infoEl.textContent = `Select penalty duration for ${player.name} (${t.name})`;
+      }
+
+      const modal = document.getElementById('penalty-dialog-modal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closePenaltyDialog() {
+      const modal = document.getElementById('penalty-dialog-modal');
+      if (modal) modal.style.display = 'none';
+      _penaltyTargetTeam = null;
+      _penaltyTargetPlayerId = null;
+    }
+
+    // Setup click handlers for modal action buttons
+    document.addEventListener('DOMContentLoaded', () => {
+      window.openPenaltyDialog = openPenaltyDialog;
+      window.closePenaltyDialog = closePenaltyDialog;
+      window.addCardForPlayer = addCardForPlayer;
+      window.confirmAction = confirmAction;
+
+      document.getElementById('spp-trigger-btn')?.addEventListener('click', () => {
+        if (_penaltyTargetTeam && _penaltyTargetPlayerId) {
+          triggerPenalty(_penaltyTargetTeam, _penaltyTargetPlayerId, 'SPP');
+          closePenaltyDialog();
+        }
+      });
+
+      document.getElementById('lpp-trigger-btn')?.addEventListener('click', () => {
+        if (_penaltyTargetTeam && _penaltyTargetPlayerId) {
+          triggerPenalty(_penaltyTargetTeam, _penaltyTargetPlayerId, 'LPP');
+          closePenaltyDialog();
+        }
+      });
+    });
+  </script>
+
+  <!-- Confirmation Dialog Modal -->
+  <div id="confirm-dialog-overlay" class="confirm-overlay" style="display: none;">
+    <div class="confirm-box">
+      <div class="confirm-header">
+        <div class="confirm-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </div>
+        <h3>CONFIRM ACTION</h3>
+      </div>
+      <div class="confirm-body">
+        <p id="confirm-dialog-message">Are you sure?</p>
+      </div>
+      <div class="confirm-footer">
+        <button class="confirm-btn confirm-btn-cancel" id="confirm-cancel-btn">CANCEL</button>
+        <button class="confirm-btn confirm-btn-danger" id="confirm-ok-btn">CONFIRM</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Penalty Dialog Modal -->
+  <div id="penalty-dialog-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>SELECT PENALTY TYPE</h3>
+        <button class="modal-close" onclick="closePenaltyDialog()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="penalty-dialog-player-info">Select penalty duration for player.</p>
+        <div class="modal-actions-grid">
+          <button class="modal-action-btn spp-btn" id="spp-trigger-btn">
+            <strong>SPP</strong>
+            <span>Short Penalty (30s)</span>
+          </button>
+          <button class="modal-action-btn lpp-btn" id="lpp-trigger-btn">
+            <strong>LPP</strong>
+            <span>Long Penalty (60s)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+</html>
