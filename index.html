@@ -121,7 +121,7 @@
       font-family: 'Orbitron', sans-serif;
       font-size: 11px;
       font-weight: 700;
-      color: var(--text);
+      color: #7c7c7c;
       flex: 1;
       min-width: 0;
       background: transparent;
@@ -522,10 +522,10 @@
         <button class="toggle-btn" id="toggle-numeric" onclick="setDotMode('numeric')">Numeric Box</button>
       </div>
     </div>
-    <h1 style="color:#f5c518">WMMF</h1>
-
+    <h1 style="color:#f5c518"> WMMF</h1>
+    <div></div>
     <div style="display:flex;gap:8px;align-items:center;">
-      <button class="log-event-btn" onclick="logCustomEvent()">
+      <!-- <button class="log-event-btn" onclick="logCustomEvent()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <polyline points="14 2 14 8 20 8" />
@@ -533,7 +533,7 @@
           <line x1="9" y1="15" x2="15" y2="15" />
         </svg>
         Log Event
-      </button>
+      </button> -->
       <button class="reset-btn" onclick="confirmReset()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="1 4 1 10 7 10" />
@@ -577,16 +577,21 @@
             <span class="mini-val" id="home-timeouts-val">3</span>
             <button class="mini-btn" onclick="changeTimeout('homeTeam', 1)">+</button>
           </div>
+          <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;">
+            <span id="home-timeout-display"
+              style="font-size:11px; font-weight:700; color:var(--text); text-align:center;">00:00</span>
+            <button class="mini-btn" id="home-timeout-btn" style="width:100%;"
+              onclick="requestTimeout('homeTeam')">REQUEST TIMEOUT</button>
+          </div>
         </div>
-        <!-- <div class="sub-block">
-        <div class="sub-label">SHOW PENALTY</div>
-        <select class="penalty-select" id="home-penalty" onchange="changePenalty('homeTeam', this.value)">
-          <option value="NONE">● NONE</option>
-          <option value="MINOR">⚠ MINOR</option>
-          <option value="MAJOR">🚨 MAJOR</option>
-          <option value="MISCONDUCT">❌ MISCONDUCT</option>
-        </select>
-      </div> -->
+        <div class="sub-block">
+          <div class="sub-label">PENALTY COUNT</div>
+          <div class="mini-counter">
+            <button class="mini-btn" id="home-penalty-dec" onclick="changeTeamPenalty('homeTeam', -1)">−</button>
+            <span class="mini-val" id="home-penalty-count">0</span>
+            <button class="mini-btn" id="home-penalty-inc" onclick="changeTeamPenalty('homeTeam', 1)">+</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -633,7 +638,7 @@
           </div>
 
           <!-- SPP / LPP Trigger Buttons -->
-          <div style="display: flex; gap: 6px; margin-bottom: 8px; width: 100%; justify-content: center;">
+          <!-- <div style="display: flex; gap: 6px; margin-bottom: 8px; width: 100%; justify-content: center;">
             <button onclick="ClockEngine.pushPenalty('homePenaltyClock', 30)" title="Short Penalty Punishment — 30s"
               style="flex: 1; padding: 5px 4px; border-radius: 6px; border: 1.5px solid rgba(0,200,255,0.4); background: rgba(0,200,255,0.10); color: var(--home); font-family: inherit; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; align-items: center; gap: 1px;"
               onmouseover="this.style.background='var(--home)';this.style.color='#000';"
@@ -646,7 +651,7 @@
               onmouseout="this.style.background='rgba(255,59,59,0.10)';this.style.color='var(--penalty)';">
               LPP<span style="font-size: 9px; opacity: 0.8; font-weight: 700;">:60</span>
             </button>
-          </div>
+          </div> -->
 
           <!-- Play/Pause & Reset -->
           <div class="clock-controls" style="width: 100%; display: flex; justify-content: center; gap: 6px;">
@@ -683,7 +688,7 @@
           </div>
 
           <!-- SPP / LPP Trigger Buttons -->
-          <div style="display: flex; gap: 6px; margin-bottom: 8px; width: 100%; justify-content: center;">
+          <!-- <div style="display: flex; gap: 6px; margin-bottom: 8px; width: 100%; justify-content: center;">
             <button onclick="ClockEngine.pushPenalty('awayPenaltyClock', 30)" title="Short Penalty Punishment — 30s"
               style="flex: 1; padding: 5px 4px; border-radius: 6px; border: 1.5px solid rgba(255,140,0,0.4); background: rgba(255,140,0,0.10); color: var(--away); font-family: inherit; font-size: 10px; font-weight: 900; letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; align-items: center; gap: 1px;"
               onmouseover="this.style.background='var(--away)';this.style.color='#000';"
@@ -696,7 +701,7 @@
               onmouseout="this.style.background='rgba(255,59,59,0.10)';this.style.color='var(--penalty)';">
               LPP<span style="font-size: 9px; opacity: 0.8; font-weight: 700;">:60</span>
             </button>
-          </div>
+          </div> -->
 
           <!-- Play/Pause & Reset -->
           <div class="clock-controls" style="width: 100%; display: flex; justify-content: center; gap: 6px;">
@@ -750,16 +755,21 @@
             <span class="mini-val" id="away-timeouts-val">3</span>
             <button class="mini-btn" onclick="changeTimeout('awayTeam', 1)">+</button>
           </div>
+          <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;">
+            <span id="away-timeout-display"
+              style="font-size:11px; font-weight:700; color:var(--text); text-align:center;">00:00</span>
+            <button class="mini-btn" id="away-timeout-btn" style="width:100%;"
+              onclick="requestTimeout('awayTeam')">REQUEST TIMEOUT</button>
+          </div>
         </div>
-        <!-- <div class="sub-block">
-          <div class="sub-label">SHOW PENALTY</div>
-          <select class="penalty-select" id="away-penalty" onchange="changePenalty('awayTeam', this.value)">
-            <option value="NONE">● NONE</option>
-            <option value="MINOR">⚠ MINOR</option>
-            <option value="MAJOR">🚨 MAJOR</option>
-            <option value="MISCONDUCT">❌ MISCONDUCT</option>
-          </select>
-        </div> -->
+        <div class="sub-block">
+          <div class="sub-label">PENALTY COUNT</div>
+          <div class="mini-counter">
+            <button class="mini-btn" id="away-penalty-dec" onclick="changeTeamPenalty('awayTeam', -1)">−</button>
+            <span class="mini-val" id="away-penalty-count">0</span>
+            <button class="mini-btn" id="away-penalty-inc" onclick="changeTeamPenalty('awayTeam', 1)">+</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1052,6 +1062,25 @@
     const _origRenderAdmin = typeof renderAdmin !== 'undefined' ? renderAdmin : null;
 
     // Override subscribe callback to add animations
+    const _cardRosterSignature = { home: '', away: '' };
+
+    function _getRosterSignature(state, team) {
+      return (state?.[`${team}Team`]?.roster || [])
+        .map(p => `${p.id}:${p.name}`)
+        .join('|');
+    }
+
+    function _shouldRenderCardDropdowns(state) {
+      const homeSig = _getRosterSignature(state, 'home');
+      const awaySig = _getRosterSignature(state, 'away');
+      if (homeSig !== _cardRosterSignature.home || awaySig !== _cardRosterSignature.away) {
+        _cardRosterSignature.home = homeSig;
+        _cardRosterSignature.away = awaySig;
+        return true;
+      }
+      return false;
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       StateManager.subscribe((state) => {
         // Score pop animation
@@ -1074,8 +1103,10 @@
         const ec = document.getElementById('event-count');
         if (ec) ec.textContent = `${state.matchHistory.length} event${state.matchHistory.length !== 1 ? 's' : ''} logged`;
 
-        // Update card dropdowns if roster changes
-        renderAllCards();
+        // Update card dropdowns only when roster data changes
+        if (_shouldRenderCardDropdowns(state)) {
+          renderAllCards();
+        }
       });
 
       /* ── Card Tracking ───────────────────────────────── */

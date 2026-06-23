@@ -14,6 +14,7 @@ const MAX_FOULS = 8;        // per player
 const MAX_TEAM_FOULS = 10;       // per team
 const MAX_PLAYERS = 8;        // per roster
 const MAX_TIMEOUTS = 3;
+const TIMEOUT_SECONDS = 30;
 const SPP_SECONDS = 30;
 const LPP_SECONDS = 60;
 // Unique client id to avoid processing our own BroadcastChannel messages
@@ -30,6 +31,7 @@ function defaultState() {
       timeouts: 3,
       fouls: 0,
       penalty: 'NONE',
+      penaltyCount: 0,
       roster: []
     },
     awayTeam: {
@@ -38,10 +40,19 @@ function defaultState() {
       timeouts: 3,
       fouls: 0,
       penalty: 'NONE',
+      penaltyCount: 0,
       roster: []
     },
     matchClock: {
       seconds: MATCH_CLOCK_DEFAULT,
+      running: false
+    },
+    homeTimeoutClock: {
+      seconds: 0,
+      running: false
+    },
+    awayTimeoutClock: {
+      seconds: 0,
       running: false
     },
     selectedMatchDuration: MATCH_CLOCK_DEFAULT,
@@ -56,6 +67,8 @@ function defaultState() {
       running: false,
       queue: []
     },
+    homePenaltyPausedByTimeout: false,
+    awayPenaltyPausedByTimeout: false,
     dotMode: 'dots',          // 'dots' | 'numeric'
     matchHistory: [],
     lastUpdated: Date.now()
@@ -145,6 +158,8 @@ const ClockEngine = (() => {
   let matchInterval = null;
   let homePenaltyInterval = null;
   let awayPenaltyInterval = null;
+  let homeTimeoutInterval = null;
+  let awayTimeoutInterval = null;
 
   // ── Match clock tick ────────────────────────────────────
   function _tickMatch() {
@@ -238,6 +253,76 @@ const ClockEngine = (() => {
     StateManager.update({ [clockKey]: { seconds: 0, running: false, queue: [] } });
   }
 
+  // ── Timeout clock tick ──────────────────────────────────
+  function _tickTimeout(clockKey) {
+    const s = StateManager.getState();
+    const clock = s[clockKey];
+    if (!clock.running) return;
+    const newSec = clock.seconds - 1;
+    if (newSec <= 0) {
+      if (clockKey === 'homeTimeoutClock') {
+        clearInterval(homeTimeoutInterval); homeTimeoutInterval = null;
+      } else {
+        clearInterval(awayTimeoutInterval); awayTimeoutInterval = null;
+      }
+      StateManager.update({ [clockKey]: { seconds: 0, running: false } });
+      // Resume any penalty clocks that were paused when the timeout started
+      const cur = StateManager.getState();
+      if (cur.homePenaltyPausedByTimeout) {
+        _startPenaltyClock('homePenaltyClock');
+        StateManager.update({ homePenaltyPausedByTimeout: false });
+      }
+      if (cur.awayPenaltyPausedByTimeout) {
+        _startPenaltyClock('awayPenaltyClock');
+        StateManager.update({ awayPenaltyPausedByTimeout: false });
+      }
+      _logEvent(`${clockKey === 'homeTimeoutClock' ? 'Home' : 'Away'} timeout ended`);
+      return;
+    }
+    StateManager.update({ [clockKey]: { ...clock, seconds: newSec } });
+  }
+
+  function _startTimeoutClock(clockKey) {
+    // Pause any running penalty clocks so timeout is clean
+    const s0 = StateManager.getState();
+    const pauseUpdates = {};
+    if (s0.homePenaltyClock?.running) {
+      _stopPenaltyClock('homePenaltyClock');
+      pauseUpdates.homePenaltyPausedByTimeout = true;
+    }
+    if (s0.awayPenaltyClock?.running) {
+      _stopPenaltyClock('awayPenaltyClock');
+      pauseUpdates.awayPenaltyPausedByTimeout = true;
+    }
+    if (Object.keys(pauseUpdates).length) StateManager.update(pauseUpdates);
+
+    if (clockKey === 'homeTimeoutClock') {
+      if (homeTimeoutInterval) { clearInterval(homeTimeoutInterval); homeTimeoutInterval = null; }
+      homeTimeoutInterval = setInterval(() => _tickTimeout(clockKey), 1000);
+    } else {
+      if (awayTimeoutInterval) { clearInterval(awayTimeoutInterval); awayTimeoutInterval = null; }
+      awayTimeoutInterval = setInterval(() => _tickTimeout(clockKey), 1000);
+    }
+    const s = StateManager.getState();
+    StateManager.update({ [clockKey]: { ...s[clockKey], running: true } });
+  }
+
+  function _stopTimeoutClock(clockKey) {
+    if (clockKey === 'homeTimeoutClock') { clearInterval(homeTimeoutInterval); homeTimeoutInterval = null; }
+    else { clearInterval(awayTimeoutInterval); awayTimeoutInterval = null; }
+    const s = StateManager.getState();
+    StateManager.update({ [clockKey]: { ...s[clockKey], running: false } });
+  }
+
+  function _resetTimeoutClock(clockKey) {
+    _stopTimeoutClock(clockKey);
+    StateManager.update({ [clockKey]: { seconds: 0, running: false } });
+  }
+
+  function startTimeout(clockKey) {
+    _startTimeoutClock(clockKey);
+  }
+
   // ── Public penalty clock API ────────────────────────────
   function toggleHomePenalty() {
     const s = StateManager.getState();
@@ -251,6 +336,8 @@ const ClockEngine = (() => {
   }
   function resetHomePenalty() { _resetPenaltyClock('homePenaltyClock'); }
   function resetAwayPenalty() { _resetPenaltyClock('awayPenaltyClock'); }
+  function resetHomeTimeout() { _resetTimeoutClock('homeTimeoutClock'); }
+  function resetAwayTimeout() { _resetTimeoutClock('awayTimeoutClock'); }
 
   // ── Push seconds onto a team's penalty clock queue ──────
   function pushPenalty(clockKey, seconds) {
@@ -289,13 +376,25 @@ const ClockEngine = (() => {
     } else if (!state.awayPenaltyClock.running && awayPenaltyInterval) {
       clearInterval(awayPenaltyInterval); awayPenaltyInterval = null;
     }
+    // Home timeout clock
+    if (state.homeTimeoutClock.running && !homeTimeoutInterval) {
+      homeTimeoutInterval = setInterval(() => _tickTimeout('homeTimeoutClock'), 1000);
+    } else if (!state.homeTimeoutClock.running && homeTimeoutInterval) {
+      clearInterval(homeTimeoutInterval); homeTimeoutInterval = null;
+    }
+    // Away timeout clock
+    if (state.awayTimeoutClock.running && !awayTimeoutInterval) {
+      awayTimeoutInterval = setInterval(() => _tickTimeout('awayTimeoutClock'), 1000);
+    } else if (!state.awayTimeoutClock.running && awayTimeoutInterval) {
+      clearInterval(awayTimeoutInterval); awayTimeoutInterval = null;
+    }
   }
 
   return {
-    toggleMatch, resetMatch,
+    toggleMatch, stopMatch, resetMatch,
     toggleHomePenalty, toggleAwayPenalty,
     resetHomePenalty, resetAwayPenalty,
-    pushPenalty, syncFromState
+    startTimeout, pushPenalty, syncFromState
   };
 })();
 
@@ -353,6 +452,45 @@ function changeTimeout(team, delta) {
   const t = s[team];
   const val = Math.min(MAX_TIMEOUTS, Math.max(0, t.timeouts + delta));
   StateManager.update({ [team]: { ...t, timeouts: val } });
+}
+
+function requestTimeout(team) {
+  const s = StateManager.getState();
+  const t = s[team];
+  const timeoutKey = team === 'homeTeam' ? 'homeTimeoutClock' : 'awayTimeoutClock';
+  if (t.timeouts <= 0) {
+    alert(`${t.name} has no timeouts remaining.`);
+    return;
+  }
+  const anyActiveTimeout = (s.homeTimeoutClock?.running || s.awayTimeoutClock?.running);
+  if (anyActiveTimeout) {
+    alert('A timeout is already active. Wait until it ends before requesting another.');
+    return;
+  }
+  const activeTimeout = s[timeoutKey]?.running || s[timeoutKey]?.seconds > 0;
+  if (activeTimeout) {
+    alert(`${t.name} already has an active timeout.`);
+    return;
+  }
+  if (s.matchClock.running) {
+    ClockEngine.stopMatch();
+    _logEvent(`${t.name} timeout requested — match paused`);
+  } else {
+    _logEvent(`${t.name} timeout requested`);
+  }
+  StateManager.update({
+    [team]: { ...t, timeouts: t.timeouts - 1 },
+    [timeoutKey]: { seconds: TIMEOUT_SECONDS, running: true }
+  });
+  ClockEngine.startTimeout(timeoutKey);
+}
+
+function changeTeamPenalty(team, delta) {
+  const s = StateManager.getState();
+  const t = s[team];
+  const newCount = Math.min(MAX_TEAM_FOULS, Math.max(0, (t.penaltyCount || 0) + delta));
+  if (newCount === t.penaltyCount) return;
+  StateManager.update({ [team]: { ...t, penaltyCount: newCount } });
 }
 
 function changePenalty(team, value) {
@@ -666,6 +804,17 @@ function renderAdmin(state) {
   }
   setTextIfChanged(adminEls['home-score'], state.homeTeam.score);
   setTextIfChanged(adminEls['home-timeouts-val'], state.homeTeam.timeouts);
+  const htc = state.homeTimeoutClock || { seconds: 0, running: false };
+  setTextIfChanged(adminEls['home-timeout-display'], formatTime(htc.seconds));
+  const hTimeoutBtn = adminEls['home-timeout-btn'];
+  if (hTimeoutBtn) {
+    const btnText = htc.running ? 'TIMEOUT ACTIVE' : 'REQUEST TIMEOUT';
+    if (hTimeoutBtn.textContent !== btnText) hTimeoutBtn.textContent = btnText;
+    hTimeoutBtn.disabled = htc.running || state.homeTeam.timeouts <= 0;
+  }
+  setTextIfChanged(adminEls['home-penalty-count'], String(state.homeTeam.penaltyCount || 0));
+  if (adminEls['home-penalty-dec']) adminEls['home-penalty-dec'].disabled = (state.homeTeam.penaltyCount || 0) <= 0;
+  if (adminEls['home-penalty-inc']) adminEls['home-penalty-inc'].disabled = (state.homeTeam.penaltyCount || 0) >= MAX_TEAM_FOULS;
   setValueIfChanged(adminEls['home-penalty'], state.homeTeam.penalty);
 
   // ── Away Team ──
@@ -674,6 +823,17 @@ function renderAdmin(state) {
   }
   setTextIfChanged(adminEls['away-score'], state.awayTeam.score);
   setTextIfChanged(adminEls['away-timeouts-val'], state.awayTeam.timeouts);
+  const atc = state.awayTimeoutClock || { seconds: 0, running: false };
+  setTextIfChanged(adminEls['away-timeout-display'], formatTime(atc.seconds));
+  const aTimeoutBtn = adminEls['away-timeout-btn'];
+  if (aTimeoutBtn) {
+    const btnText = atc.running ? 'TIMEOUT ACTIVE' : 'REQUEST TIMEOUT';
+    if (aTimeoutBtn.textContent !== btnText) aTimeoutBtn.textContent = btnText;
+    aTimeoutBtn.disabled = atc.running || state.awayTeam.timeouts <= 0;
+  }
+  setTextIfChanged(adminEls['away-penalty-count'], String(state.awayTeam.penaltyCount || 0));
+  if (adminEls['away-penalty-dec']) adminEls['away-penalty-dec'].disabled = (state.awayTeam.penaltyCount || 0) <= 0;
+  if (adminEls['away-penalty-inc']) adminEls['away-penalty-inc'].disabled = (state.awayTeam.penaltyCount || 0) >= MAX_TEAM_FOULS;
   setValueIfChanged(adminEls['away-penalty'], state.awayTeam.penalty);
 
   // ── Match Clock ──
@@ -890,8 +1050,8 @@ const adminEls = {};
 function initAdminElements() {
   [
     'live-badge', 'toggle-dots', 'toggle-numeric',
-    'home-name', 'home-score', 'home-timeouts-val', 'home-penalty',
-    'away-name', 'away-score', 'away-timeouts-val', 'away-penalty',
+    'home-name', 'home-score', 'home-timeouts-val', 'home-timeout-display', 'home-timeout-btn', 'home-penalty', 'home-penalty-count', 'home-penalty-dec', 'home-penalty-inc',
+    'away-name', 'away-score', 'away-timeouts-val', 'away-timeout-display', 'away-timeout-btn', 'away-penalty', 'away-penalty-count', 'away-penalty-dec', 'away-penalty-inc',
     'match-clock-display', 'match-clock-btn',
     'home-penalty-clock-display', 'home-penalty-clock-btn', 'home-penalty-queue',
     'away-penalty-clock-display', 'away-penalty-clock-btn', 'away-penalty-queue',
@@ -921,6 +1081,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Expose globals for inline handlers
   window.changeScore = changeScore;
   window.changeTimeout = changeTimeout;
+  window.requestTimeout = requestTimeout;
+  window.changeTeamPenalty = changeTeamPenalty;
   window.changePenalty = changePenalty;
   window.updateMatchDuration = updateMatchDuration;
   window.confirmMatchReset = confirmMatchReset;
